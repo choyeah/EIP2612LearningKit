@@ -1,0 +1,70 @@
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { Contract, Signer } from "ethers";
+
+describe("Start EIP2612PermitToken test", () => {
+  async function deployEIP2612PermitTokenFixture() {
+    const [owner, addr1] = await ethers.getSigners();
+
+    const Token = await ethers.getContractFactory("EIP2612PermitToken");
+    const token = await Token.deploy("MyToken", "MTK");
+    const tokenAddress = await token.getAddress();
+
+    const Vault = await ethers.getContractFactory("Vault");
+    const vault = await Vault.deploy(tokenAddress);
+    const vaultAddress = await vault.getAddress();
+    return { token, tokenAddress, vault, vaultAddress, owner, addr1 };
+  }
+
+  describe("1", () => {
+    it("should allow permit", async function () {
+      const { token, tokenAddress, vault, vaultAddress, owner, addr1 } =
+        await loadFixture(deployEIP2612PermitTokenFixture);
+      const value = ethers.parseUnits("100", 18);
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 60; // 1시간 후 만료
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+      const version = "1";
+      const [nonce, name] = await Promise.all([
+        token.nonces(await owner.getAddress()),
+        token.name(),
+      ]);
+      const domain = {
+        chainId,
+        name,
+        version: "1",
+        verifyingContract: await token.getAddress(),
+      };
+      const types = {
+        Permit: [
+          { name: "owner", type: "address" },
+          { name: "spender", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      };
+      const message = {
+        owner,
+        spender: vaultAddress,
+        value,
+        nonce,
+        deadline,
+      };
+
+      const sig = await owner.signTypedData(domain, types, message);
+
+      console.log("sig", sig);
+
+      // await vault.depositeWithPermit(amount, deadline, v, r, s);
+      // expect(await token.balanceOf(vaultAddress)).to.eq(amount);
+      // expect(await token.balanceOf(owner.address)).to.eq(supply - amount);
+
+      // // 승인이 정상적으로 처리되었는지 확인
+      // expect(
+      //   await token.allowance(owner.getAddress(), addr1.getAddress())
+      // ).to.equal(value);
+    });
+  });
+});
